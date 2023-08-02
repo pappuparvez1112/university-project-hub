@@ -21,12 +21,35 @@ const run = async () => {
     const db = client.db("university-project-hub");
     const projectCollection = db.collection("project");
     const userCollection = db.collection("user");
+    const loginCollection = db.collection("login");
+
+    // app.get("/projects", async (req, res) => {
+    //   const cursor = projectCollection.find();
+    //   const project = await cursor.toArray();
+
+    //   res.send({ status: true, data: project });
+    // });
 
     app.get("/projects", async (req, res) => {
-      const cursor = projectCollection.find({});
-      const project = await cursor.toArray();
+      const cursor = projectCollection.find().limit(20);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
-      res.send({ status: true, data: project });
+    const indexKeys = { name: 1 };
+    const indexOptions = { name: "projectName" };
+    const result = await projectCollection.createIndex(indexKeys, indexOptions);
+    console.log(result);
+
+    app.get("/projectNameSearch/:text", async (req, res) => {
+      const text = req.params.text;
+      // console.log(text)
+      const result = await projectCollection
+        .find({
+          $or: [{ name: { $regex: text, $options: "i" } }],
+        })
+        .toArray();
+      res.send(result);
     });
 
     app.post("/projects", async (req, res) => {
@@ -48,16 +71,39 @@ const run = async () => {
     app.delete("/project/:id", async (req, res) => {
       const id = req.params.id;
 
-      const result = await productCollection.deleteOne({ _id: ObjectId(id) });
+      const result = await projectCollection.deleteOne({ _id: ObjectId(id) });
       console.log(result);
       res.send(result);
     });
 
-    app.post("/user", async (req, res) => {
+    app.post("/users", async (req, res) => {
       const user = req.body;
 
       const result = await userCollection.insertOne(user);
 
+      res.send(result);
+    });
+
+    app.post("/login", async (req, res) => {
+      const user = req.body;
+      const query = { email: user.email };
+      const existingUser = await loginCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "user already exists" });
+      }
+      const result = await loginCollection.insertOne(user);
+      res.send(result);
+    });
+    app.get("/login", async (req, res) => {
+      const user = req.body;
+
+      const result = await loginCollection.insertOne(user);
+
+      res.send(result);
+    });
+    app.get("/users", async (req, res) => {
+      const cursor = userCollection.find().limit(20);
+      const result = await cursor.toArray();
       res.send(result);
     });
 
