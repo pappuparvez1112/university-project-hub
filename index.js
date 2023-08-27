@@ -1,4 +1,5 @@
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
@@ -9,7 +10,27 @@ const cors = require("cors");
 app.use(cors());
 app.use(express.json());
 
-const uri = `mongodb+srv://university-project-hub:universityprojecthub1218@cluster0.mzmzu2p.mongodb.net/?retryWrites=true&w=majority`;
+const verifyJWT = (req, res, next) => {
+  const authorization = req.headers.authorization;
+  if (!authorization) {
+    return res
+      .status(401)
+      .send({ error: true, message: "unauthorized access" });
+  }
+  // bearer token use
+  const token = authorization.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res
+        .status(401)
+        .send({ error: true, message: "unauthorized access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+};
+
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.mzmzu2p.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -23,15 +44,28 @@ const run = async () => {
     const userCollection = db.collection("user");
     const loginCollection = db.collection("login");
 
-    // app.get("/projects", async (req, res) => {
-    //   const cursor = projectCollection.find();
-    //   const project = await cursor.toArray();
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1hr",
+      });
+      res.send({ token });
+    });
 
-    //   res.send({ status: true, data: project });
-    // });
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await loginCollection.findOne(query);
+      if (user?.role !== "admin") {
+        return res
+          .status(403)
+          .send({ error: true, message: "porbidden message" });
+      }
+      next();
+    };
 
     app.get("/projects", async (req, res) => {
-      const cursor = projectCollection.find().limit(20);
+      const cursor = projectCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -52,7 +86,7 @@ const run = async () => {
       res.send(result);
     });
 
-    app.post("/projects", async (req, res) => {
+    app.post("/projects", verifyJWT, async (req, res) => {
       const project = req.body;
 
       const result = await projectCollection.insertOne(project);
@@ -94,7 +128,31 @@ const run = async () => {
       const result = await loginCollection.insertOne(user);
       res.send(result);
     });
-    app.get("/login", async (req, res) => {
+    app.get("/login/admin/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      if (req.decoded.email !== email) {
+        res.send({ admin: false });
+      }
+      const query = { email: email };
+      const user = await loginCollection.findOne(query);
+      const result = { admin: user?.role === "admin" };
+      res.send(result);
+    });
+    // role
+    app.patch("/login/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await loginCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    app.get("/login", verifyJWT, verifyAdmin, async (req, res) => {
       const user = req.body;
 
       const result = await loginCollection.insertOne(user);
