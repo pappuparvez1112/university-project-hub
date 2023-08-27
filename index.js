@@ -43,6 +43,7 @@ const run = async () => {
     const projectCollection = db.collection("project");
     const userCollection = db.collection("user");
     const loginCollection = db.collection("login");
+    const approveCollection = db.collection("approve");
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
@@ -86,11 +87,30 @@ const run = async () => {
       res.send(result);
     });
 
+    app.patch("/project/approved/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          role: "approved",
+        },
+      };
+      const result = await approveCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
     app.post("/projects", verifyJWT, async (req, res) => {
       const project = req.body;
 
       const result = await projectCollection.insertOne(project);
 
+      res.send(result);
+    });
+
+    app.get("/project", async (req, res) => {
+      const query = { role: "approved" };
+      const result = await approveCollection.find(query).toArray();
       res.send(result);
     });
 
